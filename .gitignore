@@ -1,4 +1,6 @@
 *~
 # Moscow ML output
 *.ui
-*.ui
+*.uo
+
+mosml-patch.sml
