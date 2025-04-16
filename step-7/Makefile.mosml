@@ -1,0 +1,49 @@
+.POSIX:
+MOSMLC=mosmlc -orthodox
+
+all: MkTable.sml equal.sml
+
+### Term-related rules
+Type.ui: ORD-sig.ui MkTable.sml Subst.sml
+	$(MOSMLC) -c -structure $(patsubst %.ui,%.sig,$@)
+	$(MOSMLC) -c -toplevel Lib.sml
+	$(MOSMLC) -c -structure Lib.ui ORD-sig.ui MkTable.ui $@ $(patsubst %.ui,%.sml,$@)
+
+Term.ui:
+	$(MOSMLC) -c -structure $(patsubst %.ui,%.sig,$@)
+
+Term.sml: ORD-sig.ui MkTable.sml Subst.ui Type.ui Term.ui
+	$(MOSMLC) -c -structure Lib.ui $(patsubst %.sml,%.ui,$^) $@
+
+### Substitution-related rules
+Subst.ui:
+	$(MOSMLC) -c -structure Subst.sig
+
+Subst.sml: Subst.ui
+	$(MOSMLC) -c -structure $^ $@
+
+### Table-related rules
+ORD-sig.ui:
+	$(MOSMLC) -c -toplevel ORD-sig.sml
+
+Table-sig.ui: ORD-sig.ui
+	$(MOSMLC) -c -toplevel $^ Table-sig.sml
+
+MkTable.sml: ORD-sig.ui Table-sig.ui
+	$(MOSMLC) -c -toplevel $^ $@
+
+### Kernel related rules
+.PHONY: Kernel.sml
+boolSyntax.sml: Term.sml
+	$(MOSMLC) -c -structure $(patsubst %.sml,%.sig,$@)
+	$(MOSMLC) -c -structure Subst.ui Term.ui Lib.ui Type.ui $(patsubst %.sml,%.ui,$@) $@
+
+Kernel.sml: Term.sml MkTable.sml
+	$(MOSMLC) -c -structure $(patsubst %.sml,%.sig,$@)
+	$(MOSMLC) -c -structure Subst.ui Lib.ui Type.ui Term.ui $(patsubst %.sml,%.ui,$@) $@
+
+equal.sml: Kernel.sml
+	$(MOSMLC) -c -toplevel Subst.ui Lib.ui Type.ui Term.ui Kernel.ui equal.sml
+
+clean:
+	rm -rf *.ui *.uo

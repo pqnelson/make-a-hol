@@ -10,6 +10,7 @@
   - [Step 4: Matching](#step-4-matching)
   - [Step 5: Primitives](#step-5-primitives)
   - [Step 6: Kernel](#step-6-kernel)
+  - [Step 7: Natural Deduction Rules](#step-7-natural-deduction-rules)
 
 <a name="prefatory-comments">
 
@@ -576,6 +577,10 @@ they have not been defined yet.)
 
 $$\frac{\vdash\phi\\;t}{\vdash \textit{abs}(\textit{rep}\\;a)=a,\quad\vdash\phi\\;r=(\textit{rep}(\textit{abs}\\;r)=r)}\mathsf{defineTypeOp}\\;\textit{abs}\\;\textit{rep}\\;\vec{\alpha}$$
 
+**Convention:** Most HOLs use `SCREAMING_SNAKE_CASE` for the inference
+rules. You probably want to follow that convention, but it might be _passé_.
+
+**Remark:** _Design decisions catching up with us._<br>
 Again, depending on the design decisions made earlier (are you using a
 state monad?), our hand is forced on the design of the kernel.
 
@@ -592,6 +597,8 @@ and we'll compose everything together using `bind` operators.
 Magnus O. Myreen, Scott Owens, and Ramana Kumar's
 ["Steps Towards Verified Implementations of HOL Light"](https://www.cl.cam.ac.uk/~mom22/itp13.pdf)
 sketches out what a monadic purely functional HOL kernel looks like.
+
+**Specification.**
 
 The kernel has the following specification:
 
@@ -627,17 +634,30 @@ signature KERNEL = sig
 end;
 ```
 
+**Optional:** 
+
+1. You can include eta conversion ($\vdash(\lambda x\ldotp t\\;x)=t$)
+   as an initial axiom at this point.
+2. You may want to add some functions like `reset_axioms : unit -> unit`
+   to completely forget all axioms, or `pop_axiom : unit -> thm` to
+   remove the last axiom registered using `new_axiom` and present it
+   to the user.
+
 #### Initial axioms
 
-You will need to include at least the following axiom concerning the
-type of individuals:
+Once you have defined the quantifiers and impliciation connective, you
+will need to include at least the following axiom concerning the type
+of individuals:
 
-$\vdash\exists(f:\mbox{ind}\to\mbox{ind})\ldotp(\forall x_{1},x_{2}\ldotp f(x_{1})=f(x_{2})\implies x_{1}=x_{2})\land(\exists y\ldotp\forall x\ldotp y\neq f(x))$
+$$\vdash\exists(f:\mbox{ind}\to\mbox{ind})\ldotp(\forall x_{1},x_{2}\ldotp f(x_{1})=f(x_{2})\implies x_{1}=x_{2})\land(\exists y\ldotp\forall x\ldotp y\neq f(x))$$
 
 This is the axiom of infinity, stating that `ind` is infinite.
 
-The other axiom (consistent with intuitionistic HOL) is eta conversion
-$\vdash(\lambda x\ldotp t\\;x)=t$ which will then give us extensionality.
+The other axiom (consistent with intuitionistic HOL) is eta conversion:
+
+$$\vdash(\lambda x\ldotp t\\;x)=t$$
+
+...which will then give us extensionality.
 
 #### Example Kernels
 
@@ -651,7 +671,88 @@ and is implemented in [std-thm.ML](https://github.com/HOL-Theorem-Prover/HOL/blo
 According to [these slides](https://www.kth.se/social/files/595631e456be5b96c04314d6/itp-course.pdf),
 `HOL4/src/0/` contains the "standard kernel".
 
-### Step 7: Derived Connectives and Rules
+<a name="step-7-natural-deduction-rules"></a>
+
+### Step 7: Natural Deduction Rules
+
+In the code I wrote, I am working with only one primitive constant
+(polymorphic equality).
+
+Besides the primitive inference rules given in the kernel, we need
+some "quality of life" inference rules.
+
+> **Confession:** At this point, since I am so close to [HOL Light](https://github.com/jrh13/hol-light)
+> presentation, I am following its [hol_lib.ml](https://github.com/jrh13/hol-light/blob/master/hol_lib.ml)
+> in guiding the next several steps. This step roughly corresponds to [equal.ml](https://github.com/jrh13/hol-light/blob/master/equal.ml). But I am taking some liberties
+> which may be painful to the user-experience, like delaying the
+> printer and parser code.
+> 
+> Again, my goal is to make this project _educational_ and it seems to
+> me that developping the HOL logic is more educational than pretty printing or
+> writing a parser.
+
+We will be writing a few _derived_ inference rules. These are
+functions built using only the inference rules from the Kernel. This
+guarantees "correctness-by-construction": if we do not have a bug in
+the Kernel, then these rules should be sound.
+
+The inference rules we want include:
+
+$$\frac{\Gamma s=t,\quad\Delta t=u}{\Gamma\cup\Delta\vdash s=u}\mathsf{trans}$$
+
+(Now, after deriving "trans", we will have the same inference rules at
+our disposal as HOL Light's primitive 10 inference rules provided by
+its kernel.)
+
+$$\frac{\Gamma\vdash x = y}{\Gamma\vdash f(x) = f(y)}\mathsf{apTerm}\\;f$$
+
+$$\frac{\Gamma\vdash f = g}{\Gamma\vdash f(x) = g(x)}\mathsf{apTerm}\\;x$$
+
+$$\frac{\Gamma\vdash t_{1} = t_{2}}{\Gamma\vdash t_{2}=t_{1}}\mathsf{sym}$$
+
+When $t_{1}$ is alpha congruent to $t_{1}'$,
+
+$$\frac{}{\vdash t_{1}=t_{1}'}\mathsf{alpha}\\;t_{1}\\;t_{1}'$$
+
+This is also tied to the axiom schema $\mathsf{alphaConv}(y :
+T,\lambda x : T\ldotp t) = \vdash (\lambda x\ldotp t) = (\lambda
+y\ldotp t[y/x])$
+provided that $y$ does not occur free in $t$. You may wish to
+implement this as a function. (Also, implement `Term.is_free_in` to
+test if one term is free in another.)
+
+More inference rules to consider:
+
+$$\frac{\vdash \ell_{1}=\ell_{2},\quad\vdash r_{1}=r_{2}}{\vdash b\\;\ell_{1}\\;r_{1}=b\\;\ell_{2}\\;r_{2}}\mathsf{mkBinop}\\;b$$
+
+(provided the types all agree)
+
+**Goal:** implement these inference rules as functions 
+- `trans : thm -> thm -> thm`
+- `apTerm : Term.t -> thm -> thm`
+- `apThm : Term.t -> thm -> thm`
+- `sym : thm -> thm`
+- `alpha : Term.t -> Term.t -> thm`
+- `alphaConv : Term.t -> Term.t -> thm`
+- `mkBinop : Term.t -> thm -> thm -> thm`
+
+Construct them only using the primitives from the Kernel.
+
+**Optional:** It is customary now to also use "conversions" to
+transform a term $t$ into a theorem of the form $\vdash t=u$.
+This can be traced back to Lawrence Paulson's "A Higher-Order
+Implementation of Rewriting" (_Sci. Comp. Prog._ **3** (1983) 119-149, [arXiv:cs/9301108](https://arxiv.org/abs/cs/9301108),
+[`doi:10.1016/0167-6423(83)90008-4`](https://dx.doi.org/10.1016/0167-6423(83)90008-4)).
+
+Why bring this up? Because term rewriting is a critical aspect to
+theorem proving. It will be incredibly useful later on to build
+derived inference rules which will include term-rewriting for us, to
+simplify the user's life.
+
+But I am focusing on the educational aspect of implementing proof
+assistants, so to Hell with user experience.
+
+### Step 8: Derived Connectives and Rules
 
 So far, we only have two or three "primitive" constants. We need to
 define the remaining logical connectives and quantifiers in terms of
@@ -680,11 +781,322 @@ deduction rules for these connectives using the primitive inference
 rules from the kernel. We can make them classical by adding a new
 axiom.
 
+**Goals:**
+1. Define the quantifiers and logical connectives enumerated above
+2. Write down the natural deduction inference rules governing their usage
 
+The specification for such a module:
 
-### Step 8: Tactics
+```sml
+signature bool = sig
+  val is_iff : Term.t -> bool;
+(* ------------------------------------------------------------------------- *)
+(* Verum --- "true" or "T" *)
+(* ------------------------------------------------------------------------- *)
+  val T_DEF : thm; (* result of new_basic_def for true *)
+  val TRUTH : thm; (* |- true *)
+  (*
+    A |- tm <=> T
+   ---------------  EQT_ELIM
+      A |- tm
+  *)
+  val EQT_ELIM : thm -> thm;
+  (*
+      A |- tm
+   ---------------  EQT_INTRO
+    A |- tm <=> T
+  *)
+  val EQT_INTRO : thm -> thm;
+  
+(* ------------------------------------------------------------------------- *)
+(* Conjunction *)
+(* ------------------------------------------------------------------------- *)
+  (* AND_DEF is |- (/\) = (\p q. (\f. f p q) = (\f. f true true)) *)
+  val AND_DEF : thm;
+  val mk_conj : Term.t * Term.t -> Term.t;
+  val dest_conj : Term.t -> Term.t * Term.t;
+  val is_conj : Term.t -> bool;
+  (*
+    A1 |- t1      A2 |- t2
+   ------------------------  CONJ
+     A1 u A2 |- t1 /\ t2
+  (introduction rule)
+  *)
+  val CONJ : thm -> thm -> thm;
+  (*
+    A |- t1 /\ t2
+   ---------------  CONJUNCT1
+       A |- t1
+  (elimination rule 1)
+  *)
+  val CONJUNCT1 : thm -> thm;
+  (*
+    A |- t1 /\ t2
+   ---------------  CONJUNCT2
+       A |- t2
+  (elimination rule 2)
+  *)
+  val CONJUNCT2 : thm -> thm;
+  (*
+       A |- t1 /\ t2
+   ----------------------  CONJ_PAIR
+    A |- t1      A |- t2
+  *)
+  val CONJ_PAIR : thm -> thm * thm;
+  
+(* ------------------------------------------------------------------------- *)
+(* Implication *)
+(* ------------------------------------------------------------------------- *)
+  val IMP_DEF : thm; (* (==>) := \p q. p /\ q = p *)
+  val mk_imp : Term.t * Term.t -> Term.t;
+  val is_imp : Term.t -> bool;
+  val dest_imp : Term.t -> Term.t * Term.t;
+  (*
+    A1 |- t1 ==> t2   A2 |- t1
+   -----------------------------  MP
+          A1 \/ A2 |- t2
+  (elimination rule)
+  *)
+  val MP : thm -> thm -> thm;
+  (*
+          A |- t
+   --------------------  IMP_INTRO u
+    A - {u} |- u ==> t
+  *)
+  val IMP_INTRO : Term.t -> thm -> thm;
+  (*
+         A1, ..., An |- t
+   ----------------------------  IMP_INTRO_ALL
+    |- A1 ==> ... ==> An ==> t
+  *)
+  val IMP_INTRO_ALL : thm -> thm;
+  (*
+   A1 |- t1 ==> t2     A2 |- t2 ==> t1
+  -------------------------------------  IFF_INTRO
+          A1 \/ A2 |- t1 = t2
 
-### Step 9: Printer and Parser
+Note: this may require introducing an "UNDISC" rule
+
+    A |- t1 ==> t2
+   ----------------  UNDISCH
+     A, t1 |- t2
+  *)
+  val IFF_INTRO : thm -> thm -> thm;
+  (*
+       A |- t
+   ---------------  WEAKEN `s`
+      A, s |- t
+  *)
+  val WEAKEN : Term.t -> thm -> thm;
+  (*
+              A |- t1 <=> t2
+   -----------------------------------  IFF_ELIM
+    A |- t1 ==> t2     A |- t2 ==> t1
+  *)
+  val IFF_ELIM : thm -> thm * thm;
+  (*
+    A1 |- t1 ==> t2   A2 |- t2 ==> t3
+   ------------------------------------  IMP_TRANS
+         A1 \/ A2 |- t1 ==> t3
+  *)
+  val IMP_TRANS : thm -> thm -> thm;
+(* ------------------------------------------------------------------------- *)
+(* Universal quantifier *)
+(* ------------------------------------------------------------------------- *)
+  (* (!) = \P:A->bool. P = \x. true *)
+  val FORALL_DEF : thm;
+  val mk_forall : Term.t * Term.t -> Term.t;
+  val dest_forall : Term.t -> Term.t * Term.t;
+  val is_forall : Term.t -> bool;
+  (*
+     A |- !x. t
+   --------------  SPEC u
+    A |- t[u/x]
+  (i.e., forall elimination)
+  *)
+  val SPEC : Term.t -> thm -> thm;
+  (*
+      A |- t
+   ------------  GEN x    [where x is not free in A]
+    A |- !x. t
+  (i.e, forall introduction)
+  *)
+  val GEN : Term.t -> thm -> thm;
+(* ------------------------------------------------------------------------- *)
+(* Existential quantifier *)
+(* ------------------------------------------------------------------------- *)
+  (* (?) = \P:A->bool. !q. (!x. P x ==> q) ==> q *)
+  val EXISTS_DEF : thm;
+  val mk_exists : Term.t * Term.t -> Term.t;
+  val dest_exists : Term.t -> Term.t * Term.t;
+  val is_exists : Term.t -> bool;
+
+  (*
+    A |- p[u/x]
+   -------------  EXISTS (`?x. p`,`u`)
+    A |- ?x. p
+  (intro rule for existential quantifier)
+
+  The first argument is a quantified pattern, indicating the
+    desired shape of the conclusion of the resulting theorem.
+  *)
+  val EXISTS : Term.t * Term.t -> thm -> thm;
+  (*
+    A |- p
+   -------------  SIMPLE_EXISTS x
+    A |- ?x. p
+  *)
+  val SIMPLE_EXISTS : Term.t -> thm -> thm;
+  (*
+    A1 |- ?x. s[x]    A2 |- t
+   -------------------------------  CHOOSE (v, (A1 |- ?x. s))
+     A1 u (A2 - {s[v/x]}) |- t
+
+where v is not free in A2 - {s[v/x]}.
+  *)
+  val CHOOSE : Term.t * thm -> thm -> thm;
+
+(* ------------------------------------------------------------------------- *)
+(* Disjunction *)
+(* ------------------------------------------------------------------------- *)
+  (* (\/) = \p q. !r. (p ==> r) ==> (q ==> r) ==> r *)
+  val OR_DEF : thm;
+
+  val mk_disj : Term.t * Term.t -> Term.t;
+  val dest_disj : Term.t -> Term.t * Term.t;
+  val is_disj : Term.t -> bool;
+
+  (*
+       A |- t1
+   ---------------  DISJ1 (A |- t1) `t2`
+    A |- t1 \/ t2
+  (intro rule for disjunction)
+  *)
+  val DISJ1 : thm -> Term.t -> thm;
+  
+  (*
+       A |- t2
+   ---------------  DISJ2 (A |- t2) `t1`
+    A |- t1 \/ t2
+  (intro rule for disjunction)
+  *)
+  val DISJ2 : thm -> Term.t -> thm;
+
+  (*
+         A |- t1 \/ t2     A1 |- t      A2 |- t
+   --------------------------------------------------  DISJ_CASES
+       A \/ (A1 - {t1}) \/ (A2 - {t2}) |- t
+  (elimination rule for disjunction)
+  *)
+  val DISJ_CASES : thm -> thm -> thm -> thm;
+
+(* ------------------------------------------------------------------------- *)
+(* Falsum and Negation *)
+(* ------------------------------------------------------------------------- *)
+  (* F = !p:bool. p *)
+  val F_DEF : thm;
+  (* (~) = \p. p ==> F *)
+  val NOT_DEF : thm;
+
+  val mk_neg : Term.t -> Term.t;
+  val dest_neg : Term.t -> Term.t;
+  val is_neg : Term.t -> bool;
+  (*
+      A |- ~t
+   --------------  NOT_ELIM
+    A |- t ==> F
+  *)
+  val NOT_ELIM : thm -> thm;
+  (*
+    A |- t ==> F
+   --------------  NOT_INTRO
+      A |- ~t
+  *)
+  val NOT_INTRO : thm -> thm;
+  (*
+     A |- ~tm
+   ---------------  EQF_INTRO
+    A |- tm <=> F
+  *)
+  val EQF_INTRO : thm -> thm;
+  (*
+    A |- tm <=> F
+   ---------------  EQF_ELIM
+     A |- ~tm
+  *)
+  val EQF_ELIM : thm -> thm;
+  (*
+    A |- F
+   --------  F_ELIM t
+    A |- t
+  *)
+  val F_ELIM : Term.t -> thm -> thm;
+  
+(* ------------------------------------------------------------------------- *)
+(* Unique existence quantifier *)
+(* ------------------------------------------------------------------------- *)
+  (* (?!) = \P:A->bool. ((?) P) /\ (!x y. P x /\ P y ==> x = y) *)
+  val EX_UNIQUE_DEF : thm;
+  val mk_uexists : Term.t * Term.t -> Term.t;
+  val dest_uexists : Term.t -> Term.t * Term.t;
+  val is_uexists : Term.t -> bool;
+
+  (*
+    A |- ?!x. p
+   -------------  EXISTENCE
+    A |- ?x. p
+  *)
+  val EXISTENCE : thm -> thm;
+end;
+```
+
+### Step 9: Tactics
+
+So now we have introduced all the inference rules for intuitionistic
+natural deduction of higher-order logic. What now?
+
+Well, HOL is an LCF-style proof assistant, which works with tactics to
+prove theorems.
+
+When we state a theorem, there is a "proof obligation" the user needs
+to establish as true using the inference rules we have just derived
+(or implemented in the Kernel). 
+
+But natural deduction inference rules are applied "bottom up": we
+transform the "proof obligation" until it is an axiom or a previous
+result. 
+
+We can call these "proof obligations" (together with some additional
+metadata and a verification function [which inference rule is used to
+obtain the result]) in LCF-style provers **"goals"**.
+
+At any given time, we will have a stack of goals. We can manipulate
+the top of the stack using tactics.
+
+We may now introduce them as something like:
+
+```sml
+signature TACTIC = sig
+  (* assumptions are labeled theorems *)
+  type goal = { assumptions : (string * thm) list
+              , target : Term.t };
+
+  type validation; (* thm list -> thm *)
+  type goal_state; (* { subgoals : goal list,
+                      , metavariables : Term.t list
+                      , justify : validation
+                      } *)
+  type goal_stack; (* list of goal states *)
+  type tactic; (* = goal -> goalstate *)
+  type thm_tactic; (* thm -> tactic *)
+
+  val prove : Term.t * tactic -> thm;
+
+  val THEN : tactic -> tactic -> tactic;
+end;
+```
+
+### Step A: Printer and Parser
 
 Usually a HOL proof assistant has a printer and parser which allows
 the user to write "pretty printed" formulas and manipulate them with
