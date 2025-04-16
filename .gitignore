@@ -1,4 +1,8 @@
+# Emacs autosaves
 *~
+\#*\#
+\.\#*
+
 # Moscow ML output
 *.ui
 *.uo
