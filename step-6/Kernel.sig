@@ -17,7 +17,8 @@ signature Kernel = sig
   val absThm : Term.t -> thm -> thm;
   val appThm : thm -> thm -> thm;
   val deductAntisym : thm -> thm -> thm;
-  val subst : (Term.t, Term.t) Subst.t -> thm -> thm;
+  val termSubst : (Term.t, Term.t) Subst.t -> thm -> thm;
+  val typeSubst : (Type.t, Type.t) Subst.t -> thm -> thm;
   val betaConv : Term.t -> Term.t -> thm;
   (* defineConstant "c" rhs *)
   val defineConst : string -> Term.t -> thm;

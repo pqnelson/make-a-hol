@@ -71,6 +71,9 @@ structure Kernel :> Kernel = struct
   fun subst_hyps (s : (Term.t, Term.t) Subst.t) hs =
     map (Term.subst s) hs;
 
+  fun inst_hyps (s : (Type.t, Type.t) Subst.t) hs =
+    map (Term.inst s) hs;
+
   (*** Inference Rules ***)
   (*
    ------------- refl t
@@ -145,12 +148,21 @@ structure Kernel :> Kernel = struct
 
   (*
            A1 |- phi 
-  ---------------------------- subst sigma
+  ---------------------------- termSubst sigma
     A1[sigma] |- phi[sigma]
   *)
-  fun subst (s : (Term.t, Term.t) Subst.t) th =
+  fun termSubst (s : (Term.t, Term.t) Subst.t) th =
     Sequent(subst_hyps s (hyp th),
             Term.subst s (concl th));
+
+  (*
+           A1 |- phi 
+  ---------------------------- typeSubst sigma
+    A1[sigma] |- phi[sigma]
+  *)
+  fun typeSubst (s : (Type.t, Type.t) Subst.t) th =
+    Sequent(inst_hyps s (hyp th),
+            Term.inst s (concl th));
 
   (*
   --------------------------- betaConv (\v.t) u
