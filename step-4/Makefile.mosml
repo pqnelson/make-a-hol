@@ -1,0 +1,35 @@
+.POSIX:
+MOSMLC=mosmlc -orthodox
+
+all: MkTable.sml Subst.sml Type.ui Term.sml
+
+### Term-related rules
+Type.ui:
+	$(MOSMLC) -c -structure $(patsubst %.ui,%.sig,$@)
+	$(MOSMLC) -c -structure $@ $(patsubst %.ui,%.sml,$@)
+
+Term.ui:
+	$(MOSMLC) -c -structure $(patsubst %.ui,%.sig,$@)
+
+Term.sml: Subst.ui Type.ui Term.ui
+	$(MOSMLC) -c -structure $^ $@
+
+### Substitution-related rules
+Subst.ui:
+	$(MOSMLC) -c -structure Subst.sig
+
+Subst.sml: Subst.ui
+	$(MOSMLC) -c -structure $^ $@
+
+### Table-related rules
+ORD-sig.ui:
+	$(MOSMLC) -c -toplevel ORD-sig.sml
+
+Table-sig.ui: ORD-sig.ui
+	$(MOSMLC) -c -toplevel $^ Table-sig.sml
+
+MkTable.sml: ORD-sig.ui Table-sig.ui
+	$(MOSMLC) -c -toplevel $^ $@
+
+clean:
+	rm -rf *.ui *.uo
