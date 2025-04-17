@@ -183,19 +183,19 @@ structure Term :> Term = struct
   local
     (* replace_with : t -> t -> t
      ASSUME: new is fresh in M *)
-    fun replace_with (old as FVar _) new M =
+    fun replace_with (old as FVar _) new idx M =
      (case M of
           FVar _ => if old = M then new else M
-        | BVar _ => M
+        | BVar i => if i = idx then new else M
         | Const _ => M
-        | App(P,Q) => App(replace_with old new P,
-                          replace_with old new Q)
-        | Abs(y,N) => Abs(y, replace_with old new N))
-      | replace_with t _ _ = raise Dest ("dest_abs: expected FVar as first argument of Abs, found: "^(serialize t));
+        | App(P,Q) => App(replace_with old new idx P,
+                          replace_with old new idx Q)
+        | Abs(y,N) => Abs(y, replace_with old new (idx + 1) N))
+      | replace_with t _ _ _ = raise Dest ("dest_abs: expected FVar as first argument of Abs, found: "^(serialize t));
   in
   fun dest_abs(Abs(x,M)) =
     let val x' = fresh_for x M;
-    in (x', replace_with x x' M)
+    in (x', replace_with x x' 0 M)
     end
     | dest_abs t = raise Dest ("dest_abs: expected Abs, "^
                                "given: "^
