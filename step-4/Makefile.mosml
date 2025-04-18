@@ -11,7 +11,10 @@ Type.ui:
 Term.ui:
 	$(MOSMLC) -c -structure $(patsubst %.ui,%.sig,$@)
 
-Term.sml: Subst.ui Type.ui Term.ui
+Lib.ui:
+	$(MOSMLC) -c -toplevel Lib.sml
+
+Term.sml: Subst.ui Type.ui Term.ui Lib.ui
 	$(MOSMLC) -c -structure $^ $@
 
 ### Substitution-related rules

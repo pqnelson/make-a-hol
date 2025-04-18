@@ -9,11 +9,18 @@ signature Term = sig
   val mk_const : string * Type.t -> Term;
   val mk_app : Term * Term -> Term;
   val mk_abs : Term * Term -> Term;
-  
+
+  exception Dest of string;
   val dest_var : Term -> string * Type.t;
   val dest_const : Term -> string * Type.t;
   val dest_app : Term -> Term * Term;
   val dest_abs : Term -> Term * Term;
+
+  val is_var : Term -> bool;
+  val is_fvar : Term -> bool;
+  val is_const : Term -> bool;
+  val is_app : Term -> bool;
+  val is_abs : Term -> bool;
 
   (* type instantiation *)
   val inst : (Type.t, Type.t) Subst.t -> Term -> Term;

@@ -116,6 +116,22 @@ structure Term :> Term = struct
                                ", given: " ^
                                (serialize t));
 
+  fun is_var(FVar _) = true
+    | is_var(BVar _) = true 
+    | is_var _ = false;
+
+  fun is_fvar(FVar _) = true
+    | is_fvar _ = false;
+
+  fun is_const(Const _) = true
+    | is_const _ = false;
+
+  fun is_abs(Abs _) = true
+    | is_abs _ = false;
+  
+  fun is_app(App _) = true
+    | is_app _ = false;
+  
   (* all_vars : t -> t list
    Produce list of all `FVar` objects appearing in argument,
    even those bound to a lambda abstraction. *)
@@ -217,7 +233,7 @@ structure Term :> Term = struct
         | iter acc (App(P,Q)) = iter (iter acc P) Q
         | iter acc (Abs(_,N)) = iter acc N;
     in
-      iter [] M
+      Lib.mergesort true compare (iter [] M)
     end;
 
   local
@@ -252,7 +268,7 @@ structure Term :> Term = struct
     case (lhs, rhs) of
       (FVar _, FVar _) => eq lhs rhs
     | (Const _, Const _) => eq lhs rhs
-    | (BVar _, BVar _) => eq lhs rhs
+    | (BVar i, BVar j) => (i = j)
     | (App(M,N), App(P,Q)) => (aconv M P) andalso
                               (aconv N Q)
     | (Abs(FVar(_,ty1),M),

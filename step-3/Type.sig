@@ -12,6 +12,7 @@ signature Type = sig
 
   (* Destructuring functions for HOL Types *)
   (* (Destructorators?) *)
+  exception Dest of string;
   val dest_type : Type -> string * Type list;
   val dest_var : Type -> string;
 
