@@ -490,7 +490,7 @@ end;
     end;
   end;
 
-  fun is_eq (App(App(Const(c_),lhs),rhs)) = ("=" = c)
+  fun is_eq (App(App(Const(c, _),lhs),rhs)) = ("=" = c)
     | is_eq _ = false;
 
   fun dest_eq (App(App(c,lhs),rhs)) =
