@@ -53,10 +53,18 @@ structure Kernel :> Kernel = struct
      ());
   
   (*** Helper functions to treat hypotheses like a set ***)
-  fun insert_hyp (t : Term.t) hs =
-      if List.exists (fn hy => Term.eq t hy) hs
-      then hs
-      else t::hs;
+  fun hyp_contains (t : Term.t) hyps =
+    List.exists (fn h => Term.eq t h) hyps;
+
+  (* insert_hyp : Term.t -> Term.t list -> Term.t list
+  Adds first argument if it is absent from the second
+  argument, then returns the new list; otherwise returns the
+  second argument unmodified. *)
+  fun insert_hyp (t : Term.t) [] = [t]
+    | insert_hyp t (hyps as (h::hs)) =
+      if hyp_contains t hyps
+      then hyps
+      else t::hyps;
 
   fun rm_hyp t [] = []
     | rm_hyp t (h::hs) =
@@ -64,9 +72,10 @@ structure Kernel :> Kernel = struct
       else h::(rm_hyp t hs);
 
   fun union_hyps [] deltas = deltas
-    | union_hyps gammas [] = gammas
     | union_hyps (g::gs) deltas =
-      union_hyps gs (insert_hyp g deltas);
+      if List.null deltas
+      then (g::gs)
+      else insert_hyp g (union_hyps gs deltas);
 
   fun subst_hyps (s : (Term.t, Term.t) Subst.t) hs =
     map (Term.subst s) hs;
@@ -108,6 +117,7 @@ structure Kernel :> Kernel = struct
      A1 |- t = u
   --------------------------- absThm v
     A1 |- (\v. t) = (\v. u)
+  HOL Light calls this ABS
   *)
   fun absThm v th =
     if not (Term.is_fvar v)
@@ -125,6 +135,8 @@ structure Kernel :> Kernel = struct
     A1 |- f = g,  A2 |- x = y  
   ------------------------------ appThm
       A1 \/ A2 |- f x = g y
+  HOL Light calls this MK_COMB. It underlies the term
+  rewriting system of conversions.
   *)
   fun appThm th1 th2 =
     let
@@ -171,9 +183,10 @@ structure Kernel :> Kernel = struct
   fun betaConv abs_t u =
     let
       val (v,t) = Term.dest_abs abs_t;
+      val lhs = Term.mk_app(abs_t,u);
+      val rhs = Term.subst [(v,u)] t;
     in
-      Sequent([], Term.mk_eq(Term.mk_app(abs_t,u),
-                                   Term.subst [(v,u)] t))
+      Sequent([], Term.mk_eq(lhs, rhs))
     end;
 
   (*

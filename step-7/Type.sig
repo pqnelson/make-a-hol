@@ -7,7 +7,8 @@ signature Type = sig
   val eq : Type -> Type -> bool;
 
   val new_type : string * int -> unit;
-
+  val reset_table : unit -> unit;
+  val checkpoint_defs : unit -> unit;
   (* Constructors for HOL Types *)
   val mk_type : string * Type list -> Type;
   val mk_var : string -> Type;

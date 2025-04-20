@@ -5,7 +5,57 @@ structure Kernel :> Kernel = struct
   fun concl (Sequent (_, fm)) = fm;
   fun hyp (Sequent (asms, _)) = asms;
 
+  
+  (*** state monad ***)
+  structure State = struct
+    datatype def = ConstDef of { name : string
+                               , rhs  : Term.t }
+                 | TypeDef of { name : string
+                              , prop : Term.t
+                              , abs  : string
+                              , rep  : string }
+                 | AxiomDef of Term.t;
+    structure Table : Table = MkTable(String);
+    type t = { the_type_constants : int Table.t
+             , the_term_constants : Type.t Table.t
+             , the_axioms : thm list
+             , the_definitions : def list
+             };
+  end;
+
+  (* This should really be the exception monad transformer *)
+  datatype ('e,'a) Either = Err of 'e | Ok of 'a;
+  datatype 'a m = State of State.t -> (exn,'a) Either * State.t;
+
+  fun runState (State s : 'a m) = s;
+
+  fun return x = State (fn s => (Ok x, s));
+  
+  fun bind (act1 : 'a m) k =
+  State (fn s1 =>
+          (case runState m s1 of
+             (Ok a, s2) => runState (k a) s2
+           | (r as (Err e, s2)) => r)
+          handle e => (Err e, s1));
   (*
+  (* If we *just* want a state monad, exceptions be damned,
+     then the following code works: *)
+  datatype 'a m = State of (State.t -> 'a * State.t);
+
+  fun runState (State s : 'a m) = s;
+  
+  fun return x = State (fn s => (x, s));
+
+  (* bind : 'a m -> ('a -> 'b m) -> 'b m *)
+  fun bind (act1 : 'a m) k =
+    State (fn s1 =>
+              let
+                val (a, s2) = runState m s1;
+              in
+                runState (k a) s2
+              end);
+  *)
+  
   local
     open boolSyntax;
   in
@@ -42,29 +92,11 @@ structure Kernel :> Kernel = struct
                       t))
     end
   end;
-
-  val initial_axioms = [Sequent([], eta_fm),
-                        Sequent([], infinity_fm)];
-  *)
-  val the_axioms : (thm list) ref = ref [];
-
-  fun reset_axioms () =
-    (the_axioms := [];
-     ());
-  
   (*** Helper functions to treat hypotheses like a set ***)
-  fun hyp_contains (t : Term.t) hyps =
-    List.exists (fn h => Term.eq t h) hyps;
-
-  (* insert_hyp : Term.t -> Term.t list -> Term.t list
-  Adds first argument if it is absent from the second
-  argument, then returns the new list; otherwise returns the
-  second argument unmodified. *)
-  fun insert_hyp (t : Term.t) [] = [t]
-    | insert_hyp t (hyps as (h::hs)) =
-      if hyp_contains t hyps
-      then hyps
-      else t::hyps;
+  fun insert_hyp (t : Term.t) hs =
+      if List.exists (fn hy => Term.eq t hy) hs
+      then hs
+      else t::hs;
 
   fun rm_hyp t [] = []
     | rm_hyp t (h::hs) =
@@ -72,30 +104,29 @@ structure Kernel :> Kernel = struct
       else h::(rm_hyp t hs);
 
   fun union_hyps [] deltas = deltas
+    | union_hyps gammas [] = gammas
     | union_hyps (g::gs) deltas =
-      if List.null deltas
-      then (g::gs)
-      else insert_hyp g (union_hyps gs deltas);
+      union_hyps gs (insert_hyp g deltas);
 
   fun subst_hyps (s : (Term.t, Term.t) Subst.t) hs =
     map (Term.subst s) hs;
-
-  fun inst_hyps (s : (Type.t, Type.t) Subst.t) hs =
-    map (Term.inst s) hs;
 
   (*** Inference Rules ***)
   (*
    ------------- refl t
      |- t = t
   *)
-  fun refl t = Sequent([], (Term.mk_eq(t,t)));
-  
+  fun refl t = Sequent([], (boolSyntax.mk_eq(t,t)));
+  fun refl t = State (fn s =>
+                       (Sequent([], (boolSyntax.mk_eq(t,t))),
+                        s));
+
   (*
   -------------- assume phi
     phi |- phi
   *)
   fun assume phi =
-    if not (Term.is_bool phi)
+    if boolSyntax.Bool <> Term.type_of phi
     then raise Fail "assume: expected formula"
     else Sequent([phi],phi);
 
@@ -106,7 +137,7 @@ structure Kernel :> Kernel = struct
   *)
   fun eqMp th1 th2 =
     let
-      val (lhs, rhs) = Term.dest_eq(concl th1);
+      val (lhs, rhs) = boolSyntax.dest_eq(concl th1);
     in
       if not (Term.aconv lhs (concl th2))
       then raise Fail "eqMp: expected th2 to prove minor premise"
@@ -117,35 +148,32 @@ structure Kernel :> Kernel = struct
      A1 |- t = u
   --------------------------- absThm v
     A1 |- (\v. t) = (\v. u)
-  HOL Light calls this ABS
   *)
   fun absThm v th =
     if not (Term.is_fvar v)
     then raise Fail "absThm: needs to be given a free variable"
     else
       let
-        val (lhs,rhs) = Term.dest_eq(concl th);
+        val (lhs,rhs) = boolSyntax.dest_eq(concl th);
       in
         Sequent(hyp th,
-                Term.mk_eq(Term.mk_abs(v,lhs),
-                           Term.mk_abs(v,rhs)))
+                boolSyntax.mk_eq(Term.mk_abs(v,lhs),
+                                 Term.mk_abs(v,rhs)))
       end;
 
   (*
     A1 |- f = g,  A2 |- x = y  
   ------------------------------ appThm
       A1 \/ A2 |- f x = g y
-  HOL Light calls this MK_COMB. It underlies the term
-  rewriting system of conversions.
   *)
   fun appThm th1 th2 =
     let
-      val (f,g) = Term.dest_eq(concl th1);
-      val (x,y) = Term.dest_eq(concl th2);
+      val (f,g) = boolSyntax.dest_eq(concl th1);
+      val (x,y) = boolSyntax.dest_eq(concl th2);
     in
       Sequent (union_hyps (hyp th1) (hyp th2),
-               Term.mk_eq(Term.mk_app(f,x),
-                          Term.mk_app(g,y)))
+               boolSyntax.mk_eq(Term.mk_app(f,x),
+                                Term.mk_app(g,y)))
     end;
 
   (*
@@ -156,25 +184,16 @@ structure Kernel :> Kernel = struct
   fun deductAntisym th1 th2 =
     Sequent(union_hyps (rm_hyp (concl th2) (hyp th1))
                        (rm_hyp (concl th1) (hyp th2)),
-            Term.mk_eq(concl th1, concl th2));
+            boolSyntax.mk_eq(concl th1, concl th2));
 
   (*
            A1 |- phi 
-  ---------------------------- termSubst sigma
+  ---------------------------- subst sigma
     A1[sigma] |- phi[sigma]
   *)
-  fun termSubst (s : (Term.t, Term.t) Subst.t) th =
+  fun subst (s : (Term.t, Term.t) Subst.t) th =
     Sequent(subst_hyps s (hyp th),
             Term.subst s (concl th));
-
-  (*
-           A1 |- phi 
-  ---------------------------- typeSubst sigma
-    A1[sigma] |- phi[sigma]
-  *)
-  fun typeSubst (s : (Type.t, Type.t) Subst.t) th =
-    Sequent(inst_hyps s (hyp th),
-            Term.inst s (concl th));
 
   (*
   --------------------------- betaConv (\v.t) u
@@ -183,25 +202,20 @@ structure Kernel :> Kernel = struct
   fun betaConv abs_t u =
     let
       val (v,t) = Term.dest_abs abs_t;
-      val lhs = Term.mk_app(abs_t,u);
-      val rhs = Term.subst [(v,u)] t;
     in
-      Sequent([], Term.mk_eq(lhs, rhs))
+      Sequent([], boolSyntax.mk_eq(Term.mk_app(abs_t,u),
+                                   Term.subst [(v,u)] t))
     end;
 
   (*
   ------------- defineConst c tm
     |- c = tm
-
-  SIDE EFFECT: adds a new entry to the table of constants (and
-  their types)
   *)
   fun defineConst c tm =
     let
       val ty = Term.type_of tm;
     in
-      Term.new_const(c, ty); 
-      Sequent([], Term.mk_eq(Term.mk_const(c,ty),
+      Sequent([], boolSyntax.mk_eq(Term.mk_const(c,ty),
                                    tm))
     end;
   
@@ -221,14 +235,13 @@ structure Kernel :> Kernel = struct
     else
       let
         val fm0 = concl tyax;
-        val fm = if Term.is_app fm0
-                 then fm0
-                 else raise Fail ("defineTypeOp: " ^
-                                  "input theorem wrong shape");
+        val fm = if boolSyntax.is_exists fm0
+                  then #2 (boolSyntax.dest_exists fm0)
+                  else if Term.is_app fm0
+                  then fm0
+                  else raise Fail ("defineTypeOp: " ^
+                                   "input theorem wrong shape");
         val (P, witness) = Term.dest_app fm;
-        (* type vars in term *)
-        val tyvars = Type.vars_in (Term.type_of P);
-        val _ = Type.new_type(name, length tyvars);
         (* uncurry P, if necessary *)
         val (a_ty,r) = Type.dest_fun (Term.type_of P);
         (* REP :: name -> a
@@ -236,27 +249,25 @@ structure Kernel :> Kernel = struct
         val ty = Type.mk_type(name, []);
         val ABS = Term.mk_const(abs, Type.mk_fun(a_ty, ty));
         val REP = Term.mk_const(rep, Type.mk_fun(ty, a_ty));
-        val mk_eq = Term.mk_eq;
+        val mk_eq = boolSyntax.mk_eq;
+        val mk_forall = boolSyntax.mk_forall;
         val a = Term.mk_var("a", a_ty);
         val r = Term.mk_var("r", ty);
       in
         (* XXX: register the new type ty,
                 and the new constants ABS and REP *)
-        (Sequent([], mk_eq(Term.mk_app(ABS, Term.mk_app(REP, a)),
-                           a)),
-         Sequent([], mk_eq(Term.mk_app(P, r),
-                           mk_eq(Term.mk_app(REP,
-                                             Term.mk_app(ABS,r)),
-                                 r))))
+        (Sequent([], mk_forall(a,
+                               mk_eq(Term.mk_app(ABS, Term.mk_app(REP, a)),
+                                     a))),
+         Sequent([], mk_forall(r,
+                               mk_eq(Term.mk_app(P, r),
+                                     mk_eq(Term.mk_app(REP,
+                                                       Term.mk_app(ABS,r)),
+                                           r)))))
       end;
 
   fun new_axiom fm =
-    if Term.is_bool fm
-    then (let
-           val th = Sequent ([], fm)
-         in
-           the_axioms := th::(!the_axioms);
-           th
-         end)
+    if boolSyntax.is_bool fm
+    then Sequent ([], fm)
     else raise Fail "new_axiom: must be given a formula!";
 end;

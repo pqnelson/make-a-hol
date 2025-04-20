@@ -32,6 +32,7 @@ signature Term = sig
 
   val type_of : Term -> Type.t;
 
+  val serialize : Term -> string;
   val pprint : Term -> string;
 
   val aconv : Term -> Term -> bool;
@@ -53,6 +54,8 @@ signature Term = sig
   
   (* mutable state :( *)
   val new_const : string * Type.t -> unit;
+  val reset_table : unit -> unit;
+  val checkpoint_defs : unit -> unit;
 
   (* quality-of-life functions *)
   val is_bool : Term -> bool;

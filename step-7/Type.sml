@@ -42,12 +42,19 @@ structure Type :> Type = struct
           TypeTable.empty
           [("bool", 0),
            ("ind", 0)];
-  
+
+  val checkpoint_table = ref initial_table;
   val type_table = ref initial_table;
 
   fun new_type(name,arity) =
     type_table := TypeTable.insert (!type_table) name arity;
 
+  fun reset_table () =
+    type_table := (!checkpoint_table);
+
+  fun checkpoint_defs () =
+    checkpoint_table := (!type_table);
+  
   (** Constructors *)
   fun mk_type(name,args) =
     case (TypeTable.lookup (!type_table) name) of

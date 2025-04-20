@@ -78,14 +78,18 @@ structure Term :> Term = struct
     in
       foldl (fn ((k,v), tbl) => ConstTable.insert tbl k v)
             ConstTable.empty
-            [("=", a --> a --> Type.Bool),
-             ("==>", Type.Bool --> Type.Bool --> Type.Bool),
-             ("forall", (a --> Type.Bool) --> Type.Bool),
-             ("exist", (a --> Type.Bool) --> Type.Bool)
+            [("=", a --> a --> Type.Bool)
             ]
     end;
   
   val const_table = ref initial_table;
+  val checkpoint_table = ref initial_table;
+
+  fun reset_table () =
+    const_table := (!checkpoint_table);
+
+  fun checkpoint_defs () =
+    checkpoint_table := (!const_table);
 
   fun new_const(name, ty) =
     if ConstTable.member (!const_table) name
@@ -271,7 +275,7 @@ structure Term :> Term = struct
         | iter acc (App(P,Q)) = iter (iter acc P) Q
         | iter acc (Abs(_,N)) = iter acc N;
     in
-      iter [] M
+      Lib.mergesort true compare (iter [] M)
     end;
 
   local

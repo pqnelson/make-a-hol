@@ -21,29 +21,27 @@ structure equal = struct
     end;
   (*
    A1 |- s = t,  A2 |- t = u
-  --------------------------- trans
-      A1 \/ A2 |- s = u
+  --------------------------- trans_fast
+      A2 \/ A1 |- s = u
+  Faster than `trans`, but swaps the group of hypotheses
+  before concatenation.
   *)
-  fun trans th1 th2 =
+  fun trans_fast th1 th2 =
     let
       val (s,_) = Term.dest_eq (concl th1);
       val f = Term.curry_eq s;
+      (* th3: A2 |- (= s) t  =  (= s) u *)
       val th3 = apTerm f th2;
     in
       eqMp th3 th1
     end;
-  (*
-    A1 |- x = y
-  -------------------- apThm f
-    A1 |- f x = f y
-  *)
-  fun apThm tm th =
-    appThm th (refl tm)
-    handle _ => raise Fail "AP_THM";
+
   (*
     A |- t1 = t2
    --------------  SYM
     A |- t2 = t1
+  NOTE: sym works on "simple equations", not equations within
+  quantifiers.
   *)
   fun sym th =
     let
@@ -53,7 +51,35 @@ structure equal = struct
     in
       eqMp (appThm (apTerm (rator (rator tm)) th) lth) lth
     end;
+  (*
+    A1 |- x = y
+  -------------------- apThm f
+    A1 |- f x = f y
+  *)
+  fun apThm tm th =
+    appThm th (refl tm)
+    handle _ => raise Fail "AP_THM";
 
+  (*
+   A1 |- s = t,  A2 |- t = u
+  --------------------------- trans_preserve_hyps
+      A1 \/ A2 |- s = u
+  *)
+  fun trans_preserve_hyps th1 th2 =
+    let
+      val (_,u) = Term.dest_eq (concl th2);
+      val f = Term.curry_eq u;
+      (* th3': A1 |- (= u) s  =  (= u) t *)
+      (* th3: A1 |- (= u) t  =  (= u) s *)
+      val th3 = sym (apTerm f th1);
+      (* th2': A2 |- u = t *)
+      val th2' = sym th2;
+      (* th4: A1 \/ A2 |- (= u) s *)
+      val th4 = eqMp th3 th2';
+    in
+      sym th4
+    end;
+  val trans = trans_preserve_hyps;
   (*
 
    -------------  ALPHA t1 t2
