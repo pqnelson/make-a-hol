@@ -546,7 +546,10 @@ $$\frac{}{\vdash t=t}\mathsf{refl}~t$$
 
 $$\frac{}{\phi\vdash\phi}\mathsf{assume}~\phi$$
 
-$$\frac{\Gamma\vdash\phi=\psi,\quad\Delta\vdash\phi}{\Gamma\cup\Delta\vdash\psi}\mathsf{eqMp}$$
+$$\frac{\Gamma\vdash\phi=\psi,\quad\Delta\vdash\phi'}{\Gamma\cup\Delta\vdash\psi}\mathsf{eqMp}$$
+
+where $\phi'$ is alpha-congruent to $\phi$ in `eqMp` (and this is
+important in implementing derived inference rules),
 
 $$\frac{\Gamma\vdash t=u}{\Gamma\vdash(\lambda v\ldotp t)=(\lambda v\ldotp u)}\mathsf{absThm}~v$$
 
